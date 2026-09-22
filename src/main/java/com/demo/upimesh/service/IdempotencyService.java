@@ -1,57 +1,58 @@
 package com.demo.upimesh.service;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
-/**
- * In-memory idempotency cache. In production this would be Redis with SETNX +
- * TTL — exactly the same semantics, just distributed across instances.
- *
- * The contract:
- *   - claim(hash) returns true on first call, false on every call after that
- *     (within the TTL window)
- *   - the operation is atomic — even if 100 threads call claim(hash) at the
- *     same instant, exactly one returns true
- *
- * This is what kills the "three bridges deliver simultaneously" problem.
- * ConcurrentHashMap.putIfAbsent is the JVM-local equivalent of Redis SETNX.
- */
 @Service
 public class IdempotencyService {
 
-    private final Map<String, Instant> seen = new ConcurrentHashMap<>();
+    private static final String KEY_PREFIX = "upi:idempotency:";
+
+    private final StringRedisTemplate redisTemplate;
 
     @Value("${upi.mesh.idempotency-ttl-seconds:86400}")
     private long ttlSeconds;
 
+    public IdempotencyService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
     /**
-     * Try to claim a hash. Returns true if this caller is the first; false if
-     * someone else already claimed it (i.e. the packet is a duplicate).
+     * Atomically claims a packet hash using Redis SETNX semantics.
+     *
+     * Returns true only for the first caller.
+     * Returns false when the packet has already been processed
+     * within the configured TTL window.
      */
     public boolean claim(String packetHash) {
-        Instant now = Instant.now();
-        Instant prev = seen.putIfAbsent(packetHash, now);
-        return prev == null;
+        String key = KEY_PREFIX + packetHash;
+
+        Boolean claimed = redisTemplate.opsForValue()
+                .setIfAbsent(key, "1", Duration.ofSeconds(ttlSeconds));
+
+        return Boolean.TRUE.equals(claimed);
     }
 
+    /**
+     * Returns the number of currently tracked idempotency keys.
+     */
     public int size() {
-        return seen.size();
+        var keys = redisTemplate.keys(KEY_PREFIX + "*");
+        return keys == null ? 0 : keys.size();
     }
 
-    /** Periodically evict entries past their TTL so the map doesn't grow forever. */
-    @Scheduled(fixedDelay = 60_000)
-    public void evictExpired() {
-        Instant cutoff = Instant.now().minusSeconds(ttlSeconds);
-        seen.entrySet().removeIf(e -> e.getValue().isBefore(cutoff));
-    }
-
-    /** Test/demo helper. */
+    /**
+     * Clears all idempotency keys.
+     * Used by the demo/reset endpoint.
+     */
     public void clear() {
-        seen.clear();
+        var keys = redisTemplate.keys(KEY_PREFIX + "*");
+
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 }
