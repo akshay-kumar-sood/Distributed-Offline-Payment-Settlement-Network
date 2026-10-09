@@ -141,6 +141,3 @@ This is a proof-of-concept project, not a production payment system.
 - The project does not integrate with real banks, NPCI, or production payment authentication.
 - Offline payment authorization and double-spending prevention require additional mechanisms beyond deferred settlement.
 
-## License
-
-Developed for learning and demonstration purposes.
