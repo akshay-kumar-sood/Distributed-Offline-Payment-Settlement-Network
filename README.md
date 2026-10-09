@@ -1,32 +1,20 @@
-UPI Offline Mesh Demo
-A Spring Boot demo of offline, mesh-routed payments with deferred settlement. Virtual phones relay encrypted payment packets until a bridge device reconnects to the internet and uploads them to the backend.
-This project simulates the mesh in software. It is a learning/portfolio demo, not a real UPI integration.
+# Distributed Payment Settlement Network
 
-Features
-- Hybrid encryption: RSA-OAEP + AES-256-GCM
-- Duplicate-payment protection using SHA-256 hashes and atomic idempotency checks
-- Replay protection with a 24-hour freshness check and unique nonces
-- Transactional debit/credit and transaction ledger
-- Interactive dashboard to simulate sending, gossiping, and uploading packets
-- Concurrency and tamper-detection tests
-Requirements
-- JDK 17+
-- No separate Maven installation required; the Maven Wrapper is included.
-- H2 in-memory database (configured by the project)
-Run
-Windows (PowerShell):
-.\mvnw.cmd spring-boot:run
-macOS/Linux:
-./mvnw spring-boot:run
-Open http://localhost:8080 to use the dashboard.
-Run tests:
-.\mvnw.cmd test
-Demo flow
-1. Inject a payment from the dashboard.
-2. Run gossip rounds to distribute the encrypted packet across virtual devices.
-3. Flush bridges to upload packets to the backend.
-4. View account balances and the transaction ledger. Duplicate packets should settle only once.
-Architecture
+A Java Spring Boot project that explores secure payment packet routing and reliable transaction settlement in unreliable network environments. It simulates a device-to-device mesh where encrypted payment packets are relayed to an internet-connected bridge and processed by a central backend.
+
+## Key Features
+
+- **Hybrid Encryption:** RSA-OAEP and AES-256-GCM for payment confidentiality and tamper detection.
+- **Mesh Network Simulation:** Relays encrypted packets across virtual devices using gossip rounds.
+- **Idempotent Processing:** SHA-256-based duplicate detection with atomic checks.
+- **Replay Protection:** Rejects stale payment packets using timestamp validation and unique nonces.
+- **Transactional Settlement:** Debits and credits accounts atomically while maintaining a transaction ledger.
+- **Concurrency Safety:** Uses atomic operations and optimistic locking to protect against duplicate processing and concurrent updates.
+- **Interactive Dashboard:** Visualizes packet propagation, bridge uploads, account balances, and settlement results.
+
+## Architecture
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         SENDER PHONE (offline)                          │
 │  PaymentInstruction { sender, receiver, amount, pinHash, nonce, time }  │
@@ -65,28 +53,94 @@ Architecture
 │       @Transactional: debit sender, credit receiver, write ledger       │
 │       @Version on Account = optimistic locking (defense in depth)       │
 └─────────────────────────────────────────────────────────────────────────┘
-API
-Method	Endpoint	Purpose
-GET	/	Demo dashboard
-GET	/api/server-key	Server public key
-GET	/api/accounts	Account balances
-GET	/api/transactions	Recent transactions
-GET	/api/mesh/state	Virtual device state
-POST	/api/demo/send	Create and inject a demo payment
-POST	/api/mesh/gossip	Run a mesh gossip round
-POST	/api/mesh/flush	Upload packets from bridge devices
-POST	/api/mesh/reset	Reset mesh and idempotency state
-POST	/api/bridge/ingest	Ingest an uploaded packet
-GET	/h2-console	H2 database console
+```
 
+## Tech Stack
 
-H2 console JDBC URL: jdbc:h2:mem:upimesh
-Username: sa · Password: (blank)
-Tests
+| Technology | Purpose |
+|---|---|
+| Java 17+ | Core programming language |
+| Spring Boot | REST APIs and backend services |
+| Spring Data JPA | Persistence and database access |
+| H2 Database | In-memory account and transaction storage |
+| RSA-OAEP | AES key encryption |
+| AES-256-GCM | Payload encryption and integrity verification |
+| SHA-256 | Ciphertext hashing and duplicate detection |
+| Maven | Build and dependency management |
+
+## Getting Started
+
+### Prerequisites
+
+- JDK 17 or newer
+- Git
+
+The Maven Wrapper is included, so a separate Maven installation is not required.
+
+### Run the Application
+
+**Windows (PowerShell)**
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+**Linux / macOS**
+
+```bash
+./mvnw spring-boot:run
+```
+
+Open **http://localhost:8080** to access the dashboard.
+
+### Run Tests
+
+**Windows**
+
+```powershell
 .\mvnw.cmd test
-Tests cover encryption/decryption, tampered-ciphertext rejection, and concurrent duplicate delivery (one settlement only).
-Limitations
-- The mesh is simulated; real Bluetooth/Wi-Fi Direct communication is not implemented.
-- The in-memory database and idempotency cache are not durable or shared across server instances.
-- This demo does not integrate with NPCI, banks, real UPI accounts, or production authentication.
-- Offline payments cannot guarantee funds or prevent double-spending without additional wallet and settlement mechanisms.
+```
+
+**Linux / macOS**
+
+```bash
+./mvnw test
+```
+
+The tests cover encryption/decryption, tampered-packet rejection, and concurrent duplicate delivery.
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Demo dashboard |
+| `GET` | `/api/server-key` | Retrieve the server's public key |
+| `GET` | `/api/accounts` | View account balances |
+| `GET` | `/api/transactions` | View recent transactions |
+| `GET` | `/api/mesh/state` | Inspect virtual device states |
+| `POST` | `/api/demo/send` | Create and inject a payment |
+| `POST` | `/api/mesh/gossip` | Simulate a mesh gossip round |
+| `POST` | `/api/mesh/flush` | Upload packets from bridge devices |
+| `POST` | `/api/mesh/reset` | Reset the mesh and idempotency state |
+| `POST` | `/api/bridge/ingest` | Process an incoming payment packet |
+| `GET` | `/h2-console` | Access the H2 database console |
+
+## Design Highlights
+
+- **Duplicate protection:** An atomic `putIfAbsent` check allows only one concurrent request for a given ciphertext hash to proceed.
+- **Authenticated encryption:** AES-GCM detects ciphertext tampering during decryption.
+- **Atomic settlement:** `@Transactional` keeps account updates and ledger insertion within a single database transaction.
+- **Optimistic locking:** `@Version` helps prevent conflicting concurrent account updates.
+
+## Limitations
+
+This is a proof-of-concept project, not a production payment system.
+
+- Device-to-device mesh communication is simulated; real Bluetooth or Wi-Fi Direct networking is not implemented.
+- H2 and the idempotency cache are in-memory and are not shared across backend instances.
+- The project does not integrate with real banks, NPCI, or production payment authentication.
+- Offline payment authorization and double-spending prevention require additional mechanisms beyond deferred settlement.
+
+## License
+
+Developed for learning and demonstration purposes.
